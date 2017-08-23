@@ -98,3 +98,12 @@ ENV/
 
 # Editors
 .idea
+InstaPy-GUI.exe
+ideas.txt
+logs/followerNum.txt
+logs/followRestriction.json
+logs/inesgl_followedPool.csv
+logs/logFile.txt
+logs/followRestriction.json
+quickstart.py
+logs/followRestriction.json
