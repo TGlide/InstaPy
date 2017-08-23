@@ -12,7 +12,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver import DesiredCapabilities
 from selenium.webdriver.firefox.webdriver import FirefoxProfile
 
-from .clarifai_util import check_image
+# from .clarifai_util import check_image
 from .comment_util import comment_image
 from .like_util import check_link
 from .like_util import get_links_for_tag
@@ -51,6 +51,7 @@ class InstaPy:
         self.browser = None
 
         self.logFile = open('./logs/logFile.txt', 'a')
+        self.new_followers = open('./logs/new_followers.txt', 'a')
 
         self.username = username or environ.get('INSTA_USER')
         self.password = password or environ.get('INSTA_PW')
@@ -928,7 +929,8 @@ class InstaPy:
             print('')
             userFollowed = sample(userFollowed, int(ceil(self.user_interact_percentage*len(userFollowed)/100)))
             self.like_by_users(userFollowed, self.user_interact_amount, self.user_interact_random, self.user_interact_media)
-
+        for i in userFollowed:
+            self.new_followers.write(i)
         return self
 
     def follow_user_following(self, usernames, amount=10, random=False, interact=False, sleep_delay=600):
@@ -1141,5 +1143,14 @@ class InstaPy:
         self.logFile.write('-' * 20 + '\n\n')
         self.logFile.close()
 
+        self.new_followers.write(
+            '\nSession ended - {}\n'.format(
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            )
+        )
+        self.new_followers.write('-' * 20 + '\n\n')
+        self.new_followers.close()
+
+        
         with open('./logs/followed.txt', 'w') as followFile:
             followFile.write(str(self.followed))
