@@ -21,7 +21,8 @@ def delete_line_from_file(filepath, lineToDelete):
 
 def scroll_bottom(browser, element, range_int):
     # put a limit to the scrolling
-    if range_int > 50: range_int = 50
+    if range_int > 50:
+        range_int = 50
 
     for i in range(int(range_int / 2)):
         browser.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", element)
@@ -29,7 +30,8 @@ def scroll_bottom(browser, element, range_int):
 
     return
 
-def formatNumber(number):
-    formattedNum = number.replace(',', '').replace('.', '')
-    formattedNum = int(formattedNum.replace('k', '00').replace('m', '00000'))
-    return formattedNum
+
+def format_number(number):
+    formatted_num = number.replace(',', '').replace('.', '')
+    formatted_num = int(formatted_num.replace('k', '00').replace('m', '00000'))
+    return formatted_num

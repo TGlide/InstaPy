@@ -23,9 +23,11 @@ from .like_util import like_image
 from .like_util import get_links_for_username
 from .login_util import login_user
 from .print_log_writer import log_follower_num
+from .print_log_writer import log_interacted_pool
+from .print_log_writer import get_interacted
 from .time_util import sleep
 from .time_util import set_sleep_percentage
-from .util import formatNumber
+from .util import format_number
 from .unfollow_util import get_given_user_followers
 from .unfollow_util import get_given_user_following
 from .unfollow_util import unfollow
@@ -43,7 +45,8 @@ import random
 class InstaPy:
     """Class to be instantiated to use the script"""
 
-    def __init__(self, username=None, password=None, nogui=False, selenium_local_session=True, use_firefox=False, page_delay=25):
+    def __init__(self, username=None, password=None, nogui=False, selenium_local_session=True, use_firefox=False,
+                 page_delay=25):
         if nogui:
             self.display = Display(visible=0, size=(800, 600))
             self.display.start()
@@ -51,7 +54,7 @@ class InstaPy:
         self.browser = None
 
         self.logFile = open('./logs/logFile.txt', 'a')
-        self.new_followers = open('./logs/new_followers.txt', 'a')
+        # self.new_followers = open('./logs/new_followers.txt', 'a')
 
         self.username = username or environ.get('INSTA_USER')
         self.password = password or environ.get('INSTA_PW')
@@ -77,6 +80,8 @@ class InstaPy:
         self.automatedFollowedPool = []
         self.do_like = False
         self.like_percentage = 0
+        self.interacted = get_interacted(self.username)
+        print(self.interacted)
 
         self.dont_like = ['sex', 'nsfw']
         self.ignore_if_contains = []
@@ -243,13 +248,12 @@ class InstaPy:
         if self.aborting:
             return self
 
-        self.user_interact_amount = amount
+        self.user_interact_amount = amount  # Amount of posts to interact/like
         self.user_interact_random = random
         self.user_interact_percentage = percentage
         self.user_interact_media = media
 
         return self
-
 
     def set_ignore_users(self, users=None):
         """Changes the possible restriction to users, if user who postes
@@ -582,11 +586,18 @@ class InstaPy:
         usernames = usernames or []
 
         for index, username in enumerate(usernames):
-            print('Username [{}/{}]'.format(index +1, len(usernames)))
+            print('Username [{}/{}]'.format(index + 1, len(usernames)))
             print('--> {}'.format(username.encode('utf-8')))
             self.logFile.write('Username [{}/[]]'.format(index + 1, len(usernames)))
             self.logFile.write('--> {}\n'.format(username.encode('utf-8')))
             following = randint(0, 100) <= self.follow_percentage
+
+            if username in self.interacted:
+                print("Already interacted with username, skipping...")
+                self.logFile.write("Already interacted with username, skipping...")
+                continue
+            else:
+                log_interacted_pool(self.username, username)
 
             try:
                 links = get_links_for_username(self.browser, username, amount, random, media)
@@ -596,6 +607,7 @@ class InstaPy:
 
                 continue
 
+            # Following
             if self.do_follow and username not in self.dont_include \
                     and following \
                     and self.follow_restrict.get(username, 0) < self.follow_times:
@@ -604,7 +616,8 @@ class InstaPy:
                 print('--> Not following')
                 sleep(1)
 
-            if links == False:
+            if not links:
+                print("No images available, next user\n")
                 continue
 
             # Reset like counter for every username
@@ -638,7 +651,6 @@ class InstaPy:
                             temp_comments = []
                             commenting = randint(0, 100) <= self.comment_percentage
 
-
                             if self.use_clarifai and (following or commenting):
                                 try:
                                     checked_img, temp_comments = \
@@ -652,7 +664,7 @@ class InstaPy:
                             if self.do_comment and user_name not in self.dont_include \
                                     and checked_img and commenting:
                                 if temp_comments:
-                                     # Use clarifai related comments only!
+                                    # Use clarifai related comments only!
                                     comments = temp_comments
                                 elif is_video:
                                     comments = self.comments + self.video_comments
@@ -693,7 +705,6 @@ class InstaPy:
 
         return self
 
-
     def interact_by_users(self, usernames, amount=10, random=False, media=None):
         """Likes some amounts of images for each usernames"""
         if self.aborting:
@@ -708,7 +719,7 @@ class InstaPy:
         usernames = usernames or []
 
         for index, username in enumerate(usernames):
-            print('Username [{}/{}]'.format(index +1, len(usernames)))
+            print('Username [{}/{}]'.format(index + 1, len(usernames)))
             print('--> {}'.format(username.encode('utf-8')))
             self.logFile.write('Username [{}/[]]'.format(index + 1, len(usernames)))
             self.logFile.write('--> {}\n'.format(username.encode('utf-8')))
@@ -754,7 +765,6 @@ class InstaPy:
                                    self.username, self.like_by_followers_upper_limit,
                                    self.like_by_followers_lower_limit)
 
-
                     if not inappropriate:
                         liking = randint(0, 100) <= self.like_percentage
                         if self.do_like and liking:
@@ -769,7 +779,6 @@ class InstaPy:
                             temp_comments = []
                             commenting = randint(0, 100) <= self.comment_percentage
 
-
                             if self.use_clarifai and (following or commenting):
                                 try:
                                     checked_img, temp_comments = \
@@ -783,7 +792,7 @@ class InstaPy:
                             if self.do_comment and user_name not in self.dont_include \
                                     and checked_img and commenting:
                                 if temp_comments:
-                                     # Use clarifai related comments only!
+                                    # Use clarifai related comments only!
                                     comments = temp_comments
                                 elif is_video:
                                     comments = self.comments + self.video_comments
@@ -848,12 +857,15 @@ class InstaPy:
 
     def interact_user_followers(self, usernames, amount=10, random=False):
 
-        userToInteract = []
+        users_to_interact = []
         if not isinstance(usernames, list):
             usernames = [usernames]
+        #
         try:
             for user in usernames:
-                userToInteract += get_given_user_followers(self.browser, user, amount, self.dont_include, self.username, self.follow_restrict, random)
+                users_to_interact += get_given_user_followers(self.browser, user, amount, self.dont_include,
+                                                              self.username,
+                                                              self.follow_restrict, random)
         except (TypeError, RuntimeWarning) as err:
             if type(err) == RuntimeWarning:
                 print(u'Warning: {} , stopping follow_users'.format(err))
@@ -867,10 +879,12 @@ class InstaPy:
 
                 return self
 
-        print('--> Users: {}'.format(len(userToInteract)))
+        print('--> Users: {}'.format(len(users_to_interact)))
         print('')
-        userToInteract = sample(userToInteract, int(ceil(self.user_interact_percentage*len(userToInteract)/100)))
-        self.like_by_users(userToInteract, self.user_interact_amount, self.user_interact_random, self.user_interact_media)
+        users_to_interact = sample(users_to_interact,
+                                   int(ceil(self.user_interact_percentage * len(users_to_interact) / 100)))
+        self.like_by_users(users_to_interact, self.user_interact_amount, self.user_interact_random,
+                           self.user_interact_media)
 
         return self
 
@@ -881,7 +895,8 @@ class InstaPy:
             usernames = [usernames]
         try:
             for user in usernames:
-                userToInteract += get_given_user_following(self.browser, user, amount, self.dont_include, self.username, self.follow_restrict, random)
+                userToInteract += get_given_user_following(self.browser, user, amount, self.dont_include, self.username,
+                                                           self.follow_restrict, random)
         except (TypeError, RuntimeWarning) as err:
             if type(err) == RuntimeWarning:
                 print(u'Warning: {} , stopping follow_users'.format(err))
@@ -897,19 +912,22 @@ class InstaPy:
 
         print('--> Users: {}'.format(len(userToInteract)))
         print('')
-        userToInteract = sample(userToInteract, int(ceil(self.user_interact_percentage*len(userToInteract)/100)))
-        self.like_by_users(userToInteract, self.user_interact_amount, self.user_interact_random, self.user_interact_media)
+        userToInteract = sample(userToInteract, int(ceil(self.user_interact_percentage * len(userToInteract) / 100)))
+        self.like_by_users(userToInteract, self.user_interact_amount, self.user_interact_random,
+                           self.user_interact_media)
 
         return self
 
     def follow_user_followers(self, usernames, amount=10, random=False, interact=False, sleep_delay=600):
-        userFollowed = []
+        """Follows usernames followers"""
+        user_followed = []
         if not isinstance(usernames, list):
             usernames = [usernames]
         try:
             for user in usernames:
-                userFollowed += follow_given_user_followers(self.browser, user, amount, self.dont_include, self.username, self.follow_restrict, random, sleep_delay)
-            print("--> Total people followed : {} ".format(len(userFollowed)))
+                user_followed += follow_given_user_followers(self.browser, user, amount, self.dont_include,
+                                                             self.username, self.follow_restrict, random, sleep_delay)
+            print("--> Total people followed : {} ".format(len(user_followed)))
 
         except (TypeError, RuntimeWarning) as err:
             if type(err) == RuntimeWarning:
@@ -925,12 +943,12 @@ class InstaPy:
                 return self
 
         if interact:
-            print('--> User followed: {}'.format(userFollowed))
+            print('--> User followed: {}'.format(user_followed))
             print('')
-            userFollowed = sample(userFollowed, int(ceil(self.user_interact_percentage*len(userFollowed)/100)))
-            self.like_by_users(userFollowed, self.user_interact_amount, self.user_interact_random, self.user_interact_media)
-        for i in userFollowed:
-            self.new_followers.write(i)
+            user_followed = sample(user_followed, int(ceil(self.user_interact_percentage * len(user_followed) / 100)))
+            self.like_by_users(user_followed, self.user_interact_amount, self.user_interact_random,
+                               self.user_interact_media)
+
         return self
 
     def follow_user_following(self, usernames, amount=10, random=False, interact=False, sleep_delay=600):
@@ -939,7 +957,8 @@ class InstaPy:
             usernames = [usernames]
         try:
             for user in usernames:
-                userFollowed += follow_given_user_following(self.browser, user, amount, self.dont_include, self.username, self.follow_restrict, random, sleep_delay)
+                userFollowed += follow_given_user_following(self.browser, user, amount, self.dont_include,
+                                                            self.username, self.follow_restrict, random, sleep_delay)
             print("--> Total people followed : {} ".format(len(userFollowed)))
 
         except (TypeError, RuntimeWarning) as err:
@@ -958,8 +977,9 @@ class InstaPy:
         if interact:
             print('--> User followed: {}'.format(userFollowed))
             print('')
-            userFollowed = sample(userFollowed, int(ceil(self.user_interact_percentage*len(userFollowed)/100)))
-            self.like_by_users(userFollowed, self.user_interact_amount, self.user_interact_random, self.user_interact_media)
+            userFollowed = sample(userFollowed, int(ceil(self.user_interact_percentage * len(userFollowed) / 100)))
+            self.like_by_users(userFollowed, self.user_interact_amount, self.user_interact_random,
+                               self.user_interact_media)
 
         return self
 
@@ -987,7 +1007,7 @@ class InstaPy:
 
         return self
 
-    def like_by_feed(self, amount=50, randomize = False, unfollow = False, interact=False):
+    def like_by_feed(self, amount=50, randomize=False, unfollow=False, interact=False):
         """Like the users feed"""
 
         if self.aborting:
@@ -1018,8 +1038,8 @@ class InstaPy:
 
             for i, link in enumerate(links):
                 if liked_img == amount:
-                   done = True
-                   break
+                    done = True
+                    break
                 if randomize and random.choice([True, False]):
                     print('Post Randomly Skipped...\n')
                     skipped_img += 1
@@ -1035,7 +1055,8 @@ class InstaPy:
 
                         try:
                             inappropriate, user_name, is_video, reason = \
-                                check_link(self.browser, link, self.dont_like, self.ignore_if_contains, self.ignore_users,
+                                check_link(self.browser, link, self.dont_like, self.ignore_if_contains,
+                                           self.ignore_users,
                                            self.username, self.like_by_followers_upper_limit,
                                            self.like_by_followers_lower_limit)
 
@@ -1043,14 +1064,16 @@ class InstaPy:
                                 liked = like_image(self.browser)
 
                                 if liked:
-                                    username = self.browser.find_element_by_xpath("//main//div//div//article//header//div//a")
+                                    username = self.browser.find_element_by_xpath(
+                                        "//main//div//div//article//header//div//a")
                                     username = username.get_attribute("title")
                                     name = []
                                     name.append(username)
 
                                     if interact:
                                         print('--> User followed: {}'.format(name))
-                                        self.like_by_users(name, self.user_interact_amount, self.user_interact_random, self.user_interact_media)
+                                        self.like_by_users(name, self.user_interact_amount, self.user_interact_random,
+                                                           self.user_interact_media)
 
                                     liked_img += 1
                                     checked_img = True
@@ -1086,7 +1109,8 @@ class InstaPy:
                                     if self.do_follow and user_name not in self.dont_include \
                                             and checked_img and following \
                                             and self.follow_restrict.get(user_name, 0) < self.follow_times:
-                                        followed += follow_user(self.browser, self.follow_restrict, self.username, user_name)
+                                        followed += follow_user(self.browser, self.follow_restrict, self.username,
+                                                                user_name)
                                     else:
                                         print('--> Not following')
                                         sleep(1)
@@ -1121,7 +1145,6 @@ class InstaPy:
 
         return self
 
-
     def end(self):
         """Closes the current session"""
         dump_follow_restriction(self.follow_restrict)
@@ -1143,14 +1166,13 @@ class InstaPy:
         self.logFile.write('-' * 20 + '\n\n')
         self.logFile.close()
 
-        self.new_followers.write(
-            '\nSession ended - {}\n'.format(
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            )
-        )
-        self.new_followers.write('-' * 20 + '\n\n')
-        self.new_followers.close()
+        # self.new_followers.write(
+        #     '\nSession ended - {}\n'.format(
+        #         datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        #     )
+        # )
+        # self.new_followers.write('-' * 20 + '\n\n')
+        # self.new_followers.close()
 
-        
         with open('./logs/followed.txt', 'w') as followFile:
             followFile.write(str(self.followed))
